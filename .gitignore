@@ -102,3 +102,9 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# Ignored for security Reasons
+*.ini
+*.mp3
+*.jpg
+*.zip
