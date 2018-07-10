@@ -623,6 +623,7 @@ googleJukes.jukeCommands["speedcontrol"] = speedControl
 
 if __name__ == "__main__":
     googleJukes.playerThread.start()
+    googleJukes.updateThread.start()
     v = googleJukes.TerminalVelocity.Velocity(googleJukes.jukeCommands)
     v.start()
     v.put("-"*120)

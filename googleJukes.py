@@ -52,6 +52,15 @@ playlistParser = configparser.ConfigParser()
 skipper = threading.Event()
 audioOut = pyaudio.PyAudio()
 
+#check for config file
+if not os.path.isfile(os.getcwd() + os.sep + "config.ini"):
+    #If it doesn't exist create it
+    with open(os.getcwd() + os.sep + "config.ini", "w") as config:
+        #Write the basic config
+        config.write('[software]\nvolume = 0.0\nspeed = 1.0\ngithub = Gator-Boy11/JukePi')
+        #close the file
+        config.close
+
 #Set initial audio and play speed values
 playlistParser.read(os.getcwd() + os.sep + "config.ini")
 volume = playlistParser.getfloat("software", "volume")
@@ -137,8 +146,24 @@ def playerHandler():
                 else:
                     time.sleep(0.2)
                     playing = False
+        else:
+            #have the CPU wait when not playing so it doesn't overheat
+            time.sleep(0.1)
     #Stop pyaudio
     audioOut.terminate()
+
+def updateHandler():
+    """Automatic update Handler"""
+    global active
+    time.sleep(1)
+    while active:
+        print("Automatic update started.\n")
+        googleJukesLib.checkForUpdates(True)
+        print("Automatic update complete.\n")
+        counter = 1 * 60 * 10
+        while active and counter > 0:
+            time.sleep(0.1)
+            counter -= 1
 
 def logout(source, *args):
     """
@@ -146,13 +171,15 @@ Usage: {0}
         Logs out the user
         """
     #Get global variables
-    global active, playerThread
+    global active, playerThread, updateThread
     #Tells play thread to stop
     active = False
     #Tells audio to stop
     stop(source)
-    #Waits for thread to rejoin
+    #Waits for player thread to rejoin
     playerThread.join()
+    #Waits for update thread to rejoin
+    updateThread.join()
     #Closes the program
     exit()
 
@@ -711,7 +738,36 @@ def update(source, *args):
 Usage: {0}
         Updates copies of saved songs.
         """
-    googleJukesLib.checkForUpdates()
+    googleJukesLib.checkForUpdates(True)
+
+def changeUser(source, *args):
+    """
+Usage: {0}
+        Changes current user.
+        """
+    with open(os.getcwd() + os.sep + "config.ini", "w") as userFile:
+        #Write the basic config
+        userFile.write(source.get("Username: ") + "\n" + source.get("Password: "))
+        #close the file
+        userFile.close
+
+def login():
+    #check for user info file
+    if not os.path.isfile(os.getcwd() + os.sep + "user.txt"):
+        #If it doesn't exist create it
+        with open(os.getcwd() + os.sep + "user.txt", "w") as userFile:
+            #Write the basic config
+            userFile.write(input("Username: ") + "\n" + input("Password: "))
+            #close the file
+            userFile.close
+    with open(os.getcwd() + os.sep + "user.txt") as userFile:
+            #Write the basic config
+            userInfo = userFile.readlines()
+            #close the file
+            userFile.close
+    googleJukesLib.user = (userInfo[0], userInfo[1])
+
+googleJukesLib.login = login
 
 #Add commands to dictionary for velocity
 jukeCommands = {
@@ -733,14 +789,20 @@ jukeCommands = {
     "setSpeed":     setSpeed,
     "volume":       setVolume,
     "setVolume":    setVolume,
-    "update":       update
+    "update":       update,
+    "login":        changeUser,
 }
 
+#create player thread
 playerThread = threading.Thread(target = playerHandler)
+#create update thread
+updateThread = threading.Thread(target = updateHandler)
 
 if __name__ == "__main__":
     #Start the player thread
     playerThread.start()
+    #Start the update thread
+    updateThread.start()
     #Start velocity
     v = TerminalVelocity.Velocity(jukeCommands)
     v.start()

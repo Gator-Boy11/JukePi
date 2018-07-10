@@ -8,7 +8,7 @@ from multiprocessing.pool import ThreadPool
 
 directory = os.getcwd()
 
-songs, playlists, google = None, None, None
+songs, playlists, google, user = None, None, None, (None, None)
 
 #Characters will be replaced in this order. & MUST be first
 specialCharMap = [
@@ -48,16 +48,17 @@ def debracket(text, brackets="()[]{}"):
                 saved_chars.append(character)
     return ''.join(saved_chars).strip()
     
-def connect(username, password, verbose=True):
+def connect(username, password, verbose=True, quiet = False):
     source = gmusicapi.Mobileclient()
     #print(help(source))
     try:
+        burn = 1 / 0 # It appears google changed some backend stuff, so this forces it to use an android device
         source.login(username, password, source.FROM_MAC_ADDRESS, "en_US")
         if not source.is_authenticated():
             print("MAC adress was not authenticated")
             raise Exception
         if verbose:
-            print("MAC address worked")
+            if not quiet: print("MAC address worked")
         return source
     except Exception as e:
         #Sometimes gmusicapi is weird, and because I don't want to have to modify it, I can manually control certain aspects because python has no proper encapsulation.
@@ -66,19 +67,19 @@ def connect(username, password, verbose=True):
         #raise e
         if source.session.login(username, password, gmusicapi.utils.utils.create_mac_string(uuid.getnode()).replace(":","")):
             devices = source.get_registered_devices()
-            print(devices)
+            if not quiet: print(devices)
             source.logout()
             for option in devices:
                 if option["type"] == "ANDROID":
-                    print(option["type"])
+                    if not quiet: print(option["type"])
                     if source.login(username, password, option['id'][2:] if option['id'].startswith('0x') else option['id'].replace(':', '')):
                         if verbose:
-                            print(option["id"])
+                            if not quiet: print(option["id"])
                         return source
             for option in devices:
                 if source.login(username, password, option['id'][2:] if option['id'].startswith('0x') else option['id'].replace(':', '')):
                     if verbose:
-                        print(option["id"])
+                        if not quiet: print(option["id"])
                     break
             return source
         else:
@@ -100,9 +101,15 @@ def getSongFromTrack(track):
     global songs
     return [item for item in songs if item["id"] == track["trackId"]][0]
 
-def checkForUpdates():
-    global songs, playlists, google
-    google = connect(input("Username: "), input("Password: "))
+def login():
+    global user
+    user = (input("Username: "), input("Password: "))
+
+def checkForUpdates(quiet = False):
+    global songs, playlists, google, user
+    if user[0] == None:
+        login()
+    google = connect(user[0], user[1], False, quiet)
 
     playlists = google.get_all_user_playlist_contents()
     songs = google.get_all_songs()
@@ -123,7 +130,7 @@ def checkForUpdates():
     errors = False
     for file, error in results:
         if error is None:
-            print("%r fetched successfully" % (file))
+            if not quiet: print("%r fetched successfully" % (file))
         else:
             print("error fetching %r: %s" % (file, error))
             errors = True
